@@ -97,12 +97,8 @@ class MoodleQuickForm_capability extends MoodleQuickForm_selectgroups {
         global $PAGE;
         $this->_generateId();
         if (!$this->_flagFrozen) {
-            $PAGE->requires->string_for_js('nonematch', 'tool_editrolesbycap');
-            $PAGE->requires->string_for_js('filter', 'moodle');
-            $PAGE->requires->string_for_js('clear', 'moodle');
-            $PAGE->requires->yui_module('moodle-tool_editrolesbycap-capabilityformfield',
-                    'M.tool_editrolesbycap.init_capabilityformfield',
-                    ['#' . $this->getAttribute('id')]);
+            $PAGE->requires->js_call_amd('tool_editrolesbycap/capabilityformfield',
+                'initCapabilityFormField', ['#' . $this->getAttribute('id')]);
         }
     }
 
