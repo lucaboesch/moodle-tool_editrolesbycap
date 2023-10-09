@@ -14,140 +14,83 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Auto-save functionality for during quiz attempts.
+ * AMD module to add filtering to the capability form field type.
  *
  * @module tool_editrolesbycap/capabilityformfield
  * @copyright  2012 The Open University
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 import * as Str from 'core/str';
+import Templates from 'core/templates';
+import {exception as displayException} from 'core/notification';
 
-const ONE_HOURS = 60 * 60 * 1000;
-const cookieName = 'captblflt';
-let select = '';
-let input = '';
-let button = '';
-let label = '';
-let div = '';
-let noneMessage = '';
 let delayHandle = -1;
-let searchDelay = 100;
-
+const noneErrorMessageId = 'id_noneerrormessage';
 /**
  * Render the search field element and initialize it's event handle.
  *
- * @param {String} selector
+ * @param {String} selectorId
  */
-export const initCapabilityFormField = async(selector) => {
-    select = document.querySelector(selector);
-    if (!select.length) {
+export const initCapabilityFormField = async (selectorId) => {
+    const select = document.getElementById(selectorId);
+    if (!select) {
         return;
     }
-
-    const [
-        nonematchString,
-        filterString,
-        clearString,
-    ] = await Str.get_strings([
-        {key: 'nonematch', component: 'tool_editrolesbycap'},
-        {key: 'filter', component: 'moodle'},
-        {key: 'clear', component: 'moodle'},
-    ]);
+    const searchFieldId = selectorId + 'capabilitysearch';
+    const clearButtonid = selectorId + 'capabilityclear';
+    const nonematchString = await Str.get_string('nonematch', 'tool_editrolesbycap');
     // Get any existing filter value.
-    const filterValue = getFilterCookie();
+    const filterKey = 'captblflt';
+    const filterValue = sessionStorage.getItem(filterKey);
+    const context = {
+        id: searchFieldId,
+        clearbuttonid: clearButtonid,
+        value: filterValue,
+    };
 
-    // Create a div to hold the search UI.
-    div = document.createElement('div');
-    div.setAttribute('class', 'capabilitysearchui form-inline m-t-1');
-    div.setAttribute('style', 'width: ' + select.offsetWidth + 'px' + '; margin-left: auto; margin-right: auto;');
+    Templates.renderForPromise('tool_editrolesbycap/filter_field', context).then(({html, js}) => {
+        // Insert it into the container of the select.
+        Templates.appendNodeContents(select.parentNode, html, js);
+        const noneMessageE = document.createElement('optgroup');
+        noneMessageE.setAttribute('label', nonematchString);
+        noneMessageE.setAttribute('id', noneErrorMessageId);
+        select.append(noneMessageE);
+        setVisible(noneMessageE, false);
 
-    // Create the capability search input.
-    input = document.createElement('input');
-    input.setAttribute('type', 'text');
-    input.setAttribute('id', select.getAttribute('id') + 'capabilitysearch');
-    input.setAttribute('class', 'form-control');
-    input.setAttribute('value', filterValue);
+        // Wire the events so it actually does something.
+        const searchField = document.getElementById(searchFieldId);
+        const clearButton = document.getElementById(clearButtonid);
 
-    // Create a label for the search input.
-    label = document.createElement('label');
-    label.appendChild(document.createTextNode(filterString));
-    label.setAttribute('for', select.getAttribute('id') + 'capabilitysearch');
+        searchField.addEventListener('input', change);
+        searchField.filterKey = filterKey;
+        searchField.select = select;
 
-    // Create a clear button to clear the input.
-    button = document.createElement('input');
-    button.setAttribute('type', 'button');
-    button.setAttribute('value', clearString);
-    enableDisableClearButton(filterValue);
+        clearButton.addEventListener('click', clear);
+        clearButton.filterKey = filterKey;
+        clearButton.select = select;
+        clearButton.searchField = searchField;
 
-    // Tie it all together.
-    div.append(label);
-    div.append(input);
-    div.append(button);
-
-    // Insert it into the container of the select.
-    select.parentNode.append(div);
-
-    noneMessage = document.createElement('optgroup');
-    noneMessage.setAttribute('label', nonematchString);
-    select.append(noneMessage);
-    setVisible(noneMessage, false);
-
-    // Wire the events so it actually does something.
-    input.addEventListener('keyup', change);
-    button.addEventListener('click', clear);
-
-    if (filterValue !== '') {
-        filter();
-    }
-};
-
-/**
- * Sets a cookie that describes the filter value.
- * The cookie stores the context, and the time it was created and upon
- * retrieval is checked to ensure that the cookie is for the correct
- * context and is no more than an hour old.
- *
- * @param {String} cValue the value to store in the cookie.
- */
-const setFilterCookie = (cValue) => {
-    const d = new Date();
-    d.setTime(d.getTime() + ONE_HOURS);
-    let expires = "expires=" + d.toUTCString();
-    document.cookie = cookieName + "=" + cValue + ";" + expires + ";path=/";
-};
-
-
-/**
- * Gets the existing filter value if there is one.
- * The cookie stores the context, and the time it was created and upon
- * retrieval is checked to ensure that the cookie is for the correct
- * context and is no more than an hour old.
- *
- * @return {String} value the value from the cookie.
- */
-const getFilterCookie = () => {
-    const name = cookieName + "=";
-    const cookies = document.cookie.split(';');
-
-    for(let i = 0; i < cookies.length; i++) {
-        let cookie = cookies[i];
-        while (cookie.charAt(0) === ' ') {
-            cookie = cookie.substring(1);
+        if (filterValue !== '') {
+            filter(filterKey, select);
         }
-        if (cookie.indexOf(name) === 0) {
-            return cookie.substring(name.length, cookie.length);
-        }
-    }
-    return '';
+    }).catch(displayException);
+
 };
 
 /**
  * Filters the capability selector
+ *
+ * @param {String} filterKey
+ * @param {HTMLElement} select
  */
-const filter = () => {
-    const filterText = input.value.toLowerCase();
-    setFilterCookie(filterText);
-    enableDisableClearButton(filterText);
+const filter = (filterKey, select) => {
+    const clearButton = document.getElementById(select.getAttribute('id') + 'capabilityclear');
+    const searchField = document.getElementById(select.getAttribute('id') + 'capabilitysearch');
+    const filterText = searchField.value.toLowerCase();
+
+    sessionStorage.setItem(filterKey, filterText);
+    clearButton.disabled = (filterText === '');
+
     let allHidden = true;
     select.querySelectorAll('optgroup').forEach((optgroup) => {
         setVisible(optgroup, false);
@@ -165,42 +108,34 @@ const filter = () => {
         });
     });
     if (allHidden) {
-        setVisible(noneMessage, true);
-    }
-};
-
-/**
- * Enable / Disable clear button base on filter value.
- *
- * @param {String} textValue
- */
-const enableDisableClearButton = (textValue) => {
-    if (textValue === '') {
-        button.setAttribute('disabled', true);
-    } else {
-        button.removeAttribute('disabled');
+        const noneMessageE = document.getElementById(noneErrorMessageId);
+        setVisible(noneMessageE, true);
     }
 };
 
 /**
  * Clears the filter value.
+ *
+ * @param {Event} e the current event
  */
-const clear = () => {
-    input.value = '';
+const clear = (e) => {
+    e.target.searchField.value = '';
     if (delayHandle !== -1) {
         clearTimeout(delayHandle);
         delayHandle = -1;
     }
-    filter();
+    filter(e.target.filterKey, e.target.select);
 };
 
 /**
  * Event callback for when the filter value changes
+ *
+ * @param {Event} e the current event
  */
-const change = () => {
+const change = (e) => {
     let handle = setTimeout(function() {
-        filter();
-    }, searchDelay);
+        filter(e.target.filterKey, e.target.select);
+    }, 100);
     if (delayHandle !== -1) {
         clearTimeout(delayHandle);
     }
@@ -211,7 +146,7 @@ const change = () => {
  * Hide / Un-hide element.
  *
  * @param {Node} element
- * @param {bool} visible
+ * @param {Boolean} visible
  */
 const setVisible = (element, visible) => {
     if (visible) {
