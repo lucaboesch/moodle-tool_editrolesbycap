@@ -29,6 +29,6 @@ $plugin->requires  = 2020061500;
 $plugin->cron      = 0;
 $plugin->component = 'tool_editrolesbycap';
 $plugin->maturity  = MATURITY_STABLE;
-$plugin->release   = '2.0 for Moodle 3.9+';
+$plugin->release   = '2.1 for Moodle 5.0+';
 
 $plugin->outestssufficient = true;
