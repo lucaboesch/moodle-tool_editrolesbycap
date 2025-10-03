@@ -24,7 +24,7 @@
 
 defined('MOODLE_INTERNAL') || die();
 
-$plugin->version   = 2022030700;
+$plugin->version   = 2025100300;
 $plugin->requires  = 2020061500;
 $plugin->cron      = 0;
 $plugin->component = 'tool_editrolesbycap';
